@@ -18,6 +18,8 @@ function TherapistDashboard() {
   const [totalPatients, setTotalPatients] = useState(0);
   const [weekSessions, setWeekSessions] = useState(0);
   const [monthlyRevenue, setMonthlyRevenue] = useState(0);
+  const [avgMoodScore, setAvgMoodScore] = useState(0);
+  const [thisWeekSessions, setThisWeekSessions] = useState(0);
 
   useEffect(() => {
     // Load appointments from localStorage
@@ -61,6 +63,37 @@ function TherapistDashboard() {
         return sum + amount;
       }, 0);
       setMonthlyRevenue(revenue);
+
+      // Calculate this week's sessions
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+      const thisWeekSessionsCount = therapistAppointments.filter((apt: any) => 
+        new Date(apt.date) >= oneWeekAgo && apt.status === 'completed'
+      ).length;
+      setThisWeekSessions(thisWeekSessionsCount);
+
+      // Calculate average mood score from patient mood entries
+      const allMoodEntries = JSON.parse(localStorage.getItem('mindcare_mood_entries') || '[]');
+      const patientIds = [...new Set(therapistAppointments.map((apt: any) => apt.patientId))];
+      
+      if (patientIds.length > 0) {
+        const patientMoodEntries = allMoodEntries.filter((entry: any) => 
+          patientIds.includes(entry.userId) || patientIds.includes(entry.patientId)
+        );
+        
+        if (patientMoodEntries.length > 0) {
+          const totalMood = patientMoodEntries.reduce((sum: number, entry: any) => 
+            sum + (entry.moodIntensity || entry.mood || 3), 0
+          );
+          const avgMood = totalMood / patientMoodEntries.length;
+          // Convert from 1-10 scale to 1-5 scale for display
+          setAvgMoodScore(Math.round((avgMood / 2) * 10) / 10);
+        } else {
+          setAvgMoodScore(3.8); // Default if no mood data
+        }
+      } else {
+        setAvgMoodScore(3.8); // Default if no patients
+      }
 
       // Generate recent activity from real data
       const recentBookings = therapistAppointments
@@ -146,10 +179,17 @@ function TherapistDashboard() {
     },
     {
       title: "This Week's Sessions",
-      value: weekSessions.toString(),
+      value: thisWeekSessions.toString(),
       icon: BarChart3,
       color: 'from-orange-500 to-red-500',
       change: `$${monthlyRevenue.toLocaleString()} revenue`
+    },
+    {
+      title: 'Avg Patient Mood',
+      value: avgMoodScore.toFixed(1),
+      icon: Heart,
+      color: 'from-pink-500 to-rose-500',
+      change: `Out of 5.0 scale`
     }
   ];
 
