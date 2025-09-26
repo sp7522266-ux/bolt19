@@ -177,6 +177,42 @@ function AppointmentsPage() {
             theme === 'dark' ? 'bg-gray-800' : 'bg-white'
           }`}
         >
+          {/* Real-time Stats */}
+          <div className="grid grid-cols-4 gap-4 mb-4">
+            <div className="text-center">
+              <p className={`text-xl font-bold text-blue-500`}>
+                {realTimeStats.totalAppointments}
+              </p>
+              <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                Total Appointments
+              </p>
+            </div>
+            <div className="text-center">
+              <p className={`text-xl font-bold text-green-500`}>
+                {realTimeStats.confirmedToday}
+              </p>
+              <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                Confirmed Today
+              </p>
+            </div>
+            <div className="text-center">
+              <p className={`text-xl font-bold text-purple-500`}>
+                {realTimeStats.completedThisWeek}
+              </p>
+              <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                This Week
+              </p>
+            </div>
+            <div className="text-center">
+              <p className={`text-xl font-bold text-yellow-500`}>
+                {realTimeStats.avgSessionRating}
+              </p>
+              <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                Avg Rating
+              </p>
+            </div>
+          </div>
+          
           <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
             <div className="flex items-center space-x-4">
               <div className="relative">

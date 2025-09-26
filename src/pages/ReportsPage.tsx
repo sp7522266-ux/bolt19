@@ -21,6 +21,7 @@ function ReportsPage() {
   const [selectedReport, setSelectedReport] = useState('overview');
   const [analytics, setAnalytics] = useState<any>(null);
   const [timeSeriesData, setTimeSeriesData] = useState<any[]>([]);
+  const [realPatientData, setRealPatientData] = useState<any>({});
 
   useEffect(() => {
     // Load analytics data
@@ -30,6 +31,9 @@ function ReportsPage() {
     // Generate time series data
     const timeData = generateTimeSeriesData();
     setTimeSeriesData(timeData);
+    
+    // Load real patient data for this therapist
+    loadRealPatientData();
     
     // Set up interval to refresh data
     const interval = setInterval(() => {
@@ -43,6 +47,7 @@ function ReportsPage() {
       const updatedAnalytics = updateAnalyticsFromCurrentData();
       setAnalytics(updatedAnalytics);
       setTimeSeriesData(generateTimeSeriesData());
+      loadRealPatientData();
     };
     
     window.addEventListener('mindcare-analytics-updated', handleAnalyticsUpdate);
@@ -53,6 +58,63 @@ function ReportsPage() {
     };
   }, []);
 
+  const loadRealPatientData = () => {
+    // Get all bookings for this therapist
+    const allBookings = JSON.parse(localStorage.getItem('mindcare_bookings') || '[]');
+    const therapistBookings = allBookings.filter((booking: any) => 
+      booking.therapistName === user?.name || booking.therapistId === user?.id
+    );
+
+    // Get unique patients
+    const uniquePatients = new Set(therapistBookings.map((apt: any) => apt.patientId));
+    const totalPatients = uniquePatients.size;
+
+    // Calculate this week's sessions
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const thisWeekSessions = therapistBookings.filter((apt: any) => 
+      new Date(apt.date) >= oneWeekAgo && apt.status === 'completed'
+    ).length;
+
+    // Calculate average mood score from patient mood entries
+    const allMoodEntries = JSON.parse(localStorage.getItem('mindcare_mood_entries') || '[]');
+    const patientIds = Array.from(uniquePatients);
+    
+    let avgMoodScore = 3.8; // Default
+    if (patientIds.length > 0) {
+      const patientMoodEntries = allMoodEntries.filter((entry: any) => 
+        patientIds.includes(entry.userId) || patientIds.includes(entry.patientId)
+      );
+      
+      if (patientMoodEntries.length > 0) {
+        const totalMood = patientMoodEntries.reduce((sum: number, entry: any) => 
+          sum + (entry.moodIntensity || entry.mood || 3), 0
+        );
+        const avgMood = totalMood / patientMoodEntries.length;
+        // Convert from 1-10 scale to 1-5 scale for display
+        avgMoodScore = Math.round((avgMood / 2) * 10) / 10;
+      }
+    }
+
+    // Calculate monthly revenue from real bookings
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+    const monthlyBookings = therapistBookings.filter((apt: any) => 
+      new Date(apt.date) >= oneMonthAgo && apt.status === 'completed'
+    );
+    const monthlyRevenue = monthlyBookings.reduce((sum: number, apt: any) => {
+      const amount = parseFloat(apt.amount?.replace('$', '') || '120');
+      return sum + amount;
+    }, 0);
+
+    setRealPatientData({
+      totalPatients,
+      thisWeekSessions,
+      avgMoodScore,
+      monthlyRevenue,
+      completedSessions: therapistBookings.filter((apt: any) => apt.status === 'completed').length
+    });
+  };
   // Generate session data from time series
   const sessionData = timeSeriesData.slice(-6).map((data, index) => ({
     month: new Date(data.date).toLocaleDateString('en-US', { month: 'short' }),
@@ -108,30 +170,30 @@ function ReportsPage() {
   const stats = analytics ? [
     {
       title: 'Total Sessions',
-      value: analytics.sessions.totalSessions.toString(),
-      change: `${analytics.sessions.completedSessions} completed`,
+      value: (realPatientData.completedSessions || analytics.sessions.totalSessions).toString(),
+      change: `${realPatientData.completedSessions || analytics.sessions.completedSessions} completed`,
       icon: Clock,
       color: 'from-blue-500 to-cyan-500'
     },
     {
       title: 'Total Patients',
-      value: (analytics.users.totalUsers - analytics.therapists.totalTherapists).toString(),
-      change: `${analytics.users.newUsersThisMonth} new this month`,
+      value: (realPatientData.totalPatients || 0).toString(),
+      change: `${realPatientData.thisWeekSessions || 0} sessions this week`,
       icon: Users,
       color: 'from-green-500 to-teal-500'
     },
     {
       title: 'Monthly Revenue',
-      value: `$${analytics.revenue.monthlyRevenue.toLocaleString()}`,
-      change: `+${analytics.revenue.revenueGrowthRate}% from last month`,
+      value: `$${(realPatientData.monthlyRevenue || 0).toLocaleString()}`,
+      change: `From ${realPatientData.completedSessions || 0} completed sessions`,
       icon: DollarSign,
       color: 'from-purple-500 to-pink-500'
     },
     {
-      title: 'Completion Rate',
-      value: `${analytics.sessions.sessionCompletionRate.toFixed(1)}%`,
-      change: 'Session completion',
-      icon: TrendingUp,
+      title: 'Avg Patient Mood',
+      value: `${(realPatientData.avgMoodScore || 3.8).toFixed(1)}/5`,
+      change: 'Patient wellbeing score',
+      icon: Heart,
       color: 'from-orange-500 to-red-500'
     }
   ] : [];

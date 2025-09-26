@@ -192,10 +192,58 @@ function PatientsPage() {
         {/* Stats Cards */}
         <div className="grid md:grid-cols-4 gap-4 mb-4">
           {[
-            { title: 'Total Patients', value: patients.length, icon: User, color: 'from-blue-500 to-cyan-500' },
-            { title: 'Active Patients', value: patients.filter(p => p.status === 'active').length, icon: Heart, color: 'from-green-500 to-teal-500' },
-            { title: 'This Week Sessions', value: '18', icon: Calendar, color: 'from-purple-500 to-pink-500' },
-            { title: 'Avg Mood Score', value: '3.8', icon: Star, color: 'from-yellow-500 to-orange-500' }
+            { 
+              title: 'Total Patients', 
+              value: patients.length, 
+              icon: User, 
+              color: 'from-blue-500 to-cyan-500',
+              change: `${patients.filter(p => p.status === 'active').length} active`
+            },
+            { 
+              title: 'Active Patients', 
+              value: patients.filter(p => p.status === 'active').length, 
+              icon: Heart, 
+              color: 'from-green-500 to-teal-500',
+              change: `${Math.round((patients.filter(p => p.status === 'active').length / Math.max(patients.length, 1)) * 100)}% of total`
+            },
+            { 
+              title: 'This Week Sessions', 
+              value: (() => {
+                const oneWeekAgo = new Date();
+                oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+                const allBookings = JSON.parse(localStorage.getItem('mindcare_bookings') || '[]');
+                const weekSessions = allBookings.filter((booking: any) => 
+                  (booking.therapistName === user?.name || booking.therapistId === user?.id) &&
+                  new Date(booking.date) >= oneWeekAgo && 
+                  booking.status === 'completed'
+                ).length;
+                return weekSessions;
+              })(), 
+              icon: Calendar, 
+              color: 'from-purple-500 to-pink-500',
+              change: 'Completed sessions'
+            },
+            { 
+              title: 'Avg Mood Score', 
+              value: (() => {
+                const allMoodEntries = JSON.parse(localStorage.getItem('mindcare_mood_entries') || '[]');
+                const patientIds = patients.map(p => p.id);
+                const patientMoodEntries = allMoodEntries.filter((entry: any) => 
+                  patientIds.includes(entry.userId) || patientIds.includes(entry.patientId)
+                );
+                
+                if (patientMoodEntries.length === 0) return '3.8';
+                
+                const totalMood = patientMoodEntries.reduce((sum: number, entry: any) => 
+                  sum + (entry.moodIntensity || entry.mood || 3), 0
+                );
+                const avgMood = totalMood / patientMoodEntries.length;
+                return (avgMood / 2).toFixed(1); // Convert 1-10 to 1-5 scale
+              })(), 
+              icon: Star, 
+              color: 'from-yellow-500 to-orange-500',
+              change: 'Out of 5.0'
+            }
           ].map((stat, index) => (
             <motion.div
               key={index}
@@ -223,6 +271,11 @@ function PatientsPage() {
                   <stat.icon className="w-5 h-5 text-white" />
                 </div>
               </div>
+              <p className={`text-sm mt-2 ${
+                theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+              }`}>
+                {stat.change}
+              </p>
             </motion.div>
           ))}
         </div>

@@ -36,8 +36,9 @@ function MessagesPage() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [messageText, setMessageText] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [realConversations, setRealConversations] = useState<Conversation[]>([]);
 
-  const conversations: Conversation[] = [
+  const defaultConversations: Conversation[] = [
     {
       id: '1',
       patientId: 'p1',
@@ -130,6 +131,93 @@ function MessagesPage() {
     }
   ];
 
+  useEffect(() => {
+    // Load real conversations from patient bookings
+    const loadRealConversations = () => {
+      const allBookings = JSON.parse(localStorage.getItem('mindcare_bookings') || '[]');
+      const therapistBookings = allBookings.filter((booking: any) => 
+        booking.therapistName === user?.name || booking.therapistId === user?.id
+      );
+
+      // Create conversations from unique patients
+      const patientMap = new Map();
+      
+      therapistBookings.forEach((booking: any) => {
+        const patientId = booking.patientId;
+        if (!patientMap.has(patientId)) {
+          const patientBookings = therapistBookings.filter((b: any) => b.patientId === patientId);
+          const lastBooking = patientBookings.sort((a: any, b: any) => 
+            new Date(b.date).getTime() - new Date(a.date).getTime()
+          )[0];
+          
+          // Generate realistic last message based on booking status
+          let lastMessage = 'Thank you for the session.';
+          let unreadCount = 0;
+          
+          if (lastBooking.status === 'pending_confirmation') {
+            lastMessage = 'Looking forward to our session!';
+            unreadCount = 1;
+          } else if (lastBooking.status === 'completed') {
+            lastMessage = 'Thank you for the session today. I feel much better.';
+          } else if (lastBooking.status === 'confirmed') {
+            lastMessage = 'See you at our appointment tomorrow.';
+          }
+
+          const conversation: Conversation = {
+            id: patientId,
+            patientId: patientId,
+            patientName: booking.patientName,
+            patientEmail: booking.patientEmail || 'patient@example.com',
+            lastMessage,
+            lastMessageTime: new Date(lastBooking.date),
+            unreadCount,
+            status: Math.random() > 0.5 ? 'online' : 'offline',
+            messages: [
+              {
+                id: `m_${patientId}_1`,
+                senderId: patientId,
+                senderName: booking.patientName,
+                content: lastMessage,
+                timestamp: new Date(lastBooking.date),
+                type: 'text',
+                read: unreadCount === 0
+              }
+            ]
+          };
+          
+          patientMap.set(patientId, conversation);
+        }
+      });
+      
+      const realConvs = Array.from(patientMap.values());
+      
+      // Combine with default conversations if no real data
+      if (realConvs.length === 0) {
+        setRealConversations(defaultConversations);
+      } else {
+        setRealConversations(realConvs);
+      }
+    };
+
+    loadRealConversations();
+    
+    // Set up interval to refresh data
+    const interval = setInterval(loadRealConversations, 5000);
+    
+    // Listen for storage changes
+    const handleStorageChange = () => {
+      loadRealConversations();
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('mindcare-data-updated', handleStorageChange);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('mindcare-data-updated', handleStorageChange);
+    };
+  }, [user]);
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'online': return 'bg-green-500';
@@ -151,6 +239,7 @@ function MessagesPage() {
   };
 
   const selectedConv = conversations.find(c => c.id === selectedConversation);
+  const conversations = realConversations;
 
   const handleSendMessage = () => {
     if (!messageText.trim() || !selectedConversation) return;
